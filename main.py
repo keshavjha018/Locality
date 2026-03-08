@@ -80,6 +80,22 @@ def list_documents():
         files = [f for f in os.listdir(STORAGE_DIR) if os.path.isfile(os.path.join(STORAGE_DIR, f))]
     return {"documents": files}
 
+@app.delete("/api/documents/{filename}")
+def delete_document(filename: str, background_tasks: BackgroundTasks):
+    file_location = os.path.join(STORAGE_DIR, filename)
+    if os.path.exists(file_location):
+        try:
+            os.remove(file_location)
+            # Trigger sync to remove it from ChromaDB and tracker DB
+            background_tasks.add_task(sync_directory, STORAGE_DIR)
+            return {"status": "success", "message": f"Deleted {filename} and triggering sync"}
+        except Exception as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+    
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="File not found")
+
 @app.post("/api/query")
 def query_rag(req: QueryRequest):
     # 1. Retrieve context from ChromaDB
