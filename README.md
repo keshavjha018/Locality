@@ -23,25 +23,30 @@ Uses the incredibly fast **Qwen 2.5 0.5B Instruct** model natively in Python via
 
 ```mermaid
 graph TB
-    subgraph Frontend["🖥️ React + Vite Frontend"]
-        UI["Chat Interface"]
-        Upload["Upload Zone"]
-        DocList["Document List"]
+    subgraph App["📦 Locality Application"]
+        subgraph Static["🖥️ Built React Frontend"]
+            UI["Chat Interface"]
+            Upload["Upload Zone"]
+            DocList["Document List"]
+        end
+
+        subgraph Backend["⚙️ FastAPI Server (Port 8080)"]
+            API["API Router"]
+            StaticServe["Static File Server"]
+            Sentinel["The Sentinel\n(Ingestion Engine)"]
+            Core["The Core\n(LLM Engine)"]
+        end
     end
 
-    subgraph Backend["⚙️ FastAPI Backend"]
-        API["API Router"]
-        Sentinel["The Sentinel\n(Ingestion Engine)"]
-        Core["The Core\n(LLM Engine)"]
-    end
-
-    subgraph Storage["💾 Local Storage"]
-        FS["locality_storage/\n(Raw Files)"]
+    subgraph Storage["💾 Local Storage (Never Leaves PC)"]
+        FS["storage/\n(Raw Files)"]
         Vault["The Vault\n(ChromaDB Vectors)"]
         Tracker["SQLite Tracker\n(File State)"]
         Models["models_cache/\n(Qwen 2.5 + Embeddings)"]
     end
 
+    StaticServe -. "Serves index.html\n& JS/CSS assets" .-> Static
+    
     Upload -- "POST /api/upload" --> API
     UI -- "POST /api/query" --> API
     DocList -- "GET /api/documents" --> API
@@ -84,7 +89,7 @@ sequenceDiagram
     participant U as User
     participant FE as React UI
     participant BE as FastAPI
-    participant FS as locality_storage
+    participant FS as storage
     participant DB as SQLite Tracker
     participant V as ChromaDB
 
@@ -107,7 +112,7 @@ sequenceDiagram
 
 ## ✨ Features
 - **UI**: React + Vite frontend.
-- **Dynamic File Management**: Sleek drag-and-drop upload zone that automatically copies your documents to an internal `locality_storage` directory and syncs them instantly.
+- **Dynamic File Management**: Sleek drag-and-drop upload zone that automatically copies your documents to an internal `storage` directory and syncs them instantly.
 - **Fast Offline AI**: Pre-downloads the LLM and Embedding models completely so that subsequent usages require absolutely **zero internet access**.
 - **Real-Time Source Citation:** The AI tells you exactly which document it used to generate the answer.
 
@@ -121,18 +126,62 @@ sequenceDiagram
 
 ---
 
-## �🚀 How to Run
+## 🚀 How to Run (For End Users)
 
-1. Open the project folder `d:\projects\locality` (or your installation path).
-2. Double-click the `start.bat` file.
-   - This automatically boots up the FastAPI backend and launching the Vite UI server, opening `http://localhost:5173` in your default browser.
-3. **Important First-Run Note:** 
-   The *very first time* you start the system, Python will securely download Qwen 2.5 and ONNX Embedding models to your machine's `~/.cache/huggingface/hub` storage. **It saves these locally permanently.** You will *never* have to redownload them again unless you wipe the cache or swap models. It works entirely offline after the initial pull.
-4. **Knowledge Base Upload:**
-   In the left panel of the UI, click the **Upload Zone** or drag & drop a PDF, Markdown, CSV, or Text file into the box.
-5. The app will automatically save a local copy to `locality_storage` and trigger the sync engine.
+If you downloaded the `Locality_App.zip` release:
+
+1. **Extract the App**: Unzip `Locality_App.zip` to a folder on your computer.
+2. **Launch**: Double-click the `start.bat` file.
+   - The script will automatically check for Python, set up a secure virtual environment, install all required dependencies, launch the server, and open your web browser to `http://localhost:8080`.
+3. **First-Run Note**: 
+   The *very first time* you start the system, it will securely download the Qwen 2.5 and ONNX Embedding models to the local `models_cache` folder. **It saves these locally permanently.** You will *never* have to redownload them again. The app works entirely offline after the initial pull.
+4. **Knowledge Base Upload**:
+   - In the left panel of the UI, click the **Upload Zone** or drag & drop a PDF, Markdown, CSV, or Text file into the box.
+5. The app will automatically save a local copy to `storage` and trigger the sync engine to process the knowledge.
 6. You'll see your tracked documents appear in the **Knowledge Base** list instantly.
-7. Start chatting with your data!
+7. Start chatting with your private data!
+
+---
+
+## 💻 How to Run (Development Mode)
+
+If you are a developer cloning the source code:
+
+### 1. Backend Setup
+```bash
+# Create and activate virtual environment
+python -m venv backend_venv
+backend_venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the FastAPI server (Port 8080)
+uvicorn main:app --reload --port 8080
+```
+
+### 2. Frontend Setup
+Open a **new separate terminal block**:
+```bash
+cd frontend
+
+# Install Node dependencies
+npm install
+
+# Start the Vite development server (Port 5173)
+npm run dev
+```
+
+### 3. Creating a Release
+To package the application into a new obfuscated `.zip` file for end-users, simply run the included release script from the root directory:
+```bash
+release.bat
+```
+This batch script automatically:
+1. Builds the React frontend.
+2. Encrypts and obfuscates the Python backend using `pyarmor`.
+3. Assembles the front/backend alongside the `start.bat` launcher.
+4. Compresses everything into a ready-to-distribute `Locality_App.zip`.
 
 ---
 

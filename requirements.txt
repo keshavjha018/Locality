@@ -1,7 +1,12 @@
 fastapi
 uvicorn
 chromadb
-llama-cpp-python
 sentence-transformers
 pydantic
 python-multipart
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+transformers
+accelerate
+sqlalchemy
+pypdf

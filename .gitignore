@@ -2,7 +2,13 @@ backend_venv/
 frontend/node_modules/
 frontend/dist/
 models_cache/
-locality_storage/
+storage/
+
+release/*
+!release/
+!release/start.bat
+Locality_Release.zip
+
 chroma_db/
 locality_tracker.db
 __pycache__/

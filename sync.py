@@ -1,4 +1,8 @@
 import os
+import sys
+
+base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+os.environ["SENTENCE_TRANSFORMERS_HOME"] = os.path.join(base_dir, "models_cache")
 import chromadb
 from chromadb.utils import embedding_functions
 from database import SessionLocal, DocumentTracker

@@ -1,17 +1,24 @@
 import os
 
 # Store all downloaded AI models inside the project directory
-os.environ["HF_HOME"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models_cache")
+import sys
+# If running inside PyArmor or PyInstaller, __file__ might point to a temp dir.
+# sys._MEIPASS is used by PyInstaller, but for PyArmor we want the physical root.
+base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+os.environ["HF_HOME"] = os.path.join(base_dir, "models_cache")
 
 from fastapi import FastAPI, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import shutil
+import os
 from sync import sync_directory, collection
 
 app = FastAPI(title="Locality API")
 
-STORAGE_DIR = os.path.abspath("./locality_storage")
+STORAGE_DIR = os.path.abspath("./storage")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
 
@@ -24,25 +31,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import threading
+
 # Lazy-loaded LLM pipeline to save startup time
 query_pipeline = None
 model_status = "not_loaded"  # not_loaded | downloading | ready | error
+llm_lock = threading.Lock()
 
 def get_llm():
     global query_pipeline, model_status
-    if query_pipeline is None:
-        model_status = "downloading"
-        print("Loading local LLM (Qwen2.5-0.5B-Instruct)... this may take a moment.")
-        try:
-            from transformers import pipeline
-            query_pipeline = pipeline("text-generation", model="Qwen/Qwen2.5-0.5B-Instruct", device=-1)
-            model_status = "ready"
-            print("LLM loaded!")
-        except Exception as e:
-            model_status = "error"
-            print(f"LLM load error: {e}")
-            raise
+    with llm_lock:
+        if query_pipeline is None:
+            model_status = "downloading"
+            print("Loading local LLM (Qwen2.5-0.5B-Instruct)... this may take a moment.")
+            try:
+                from transformers import pipeline
+                query_pipeline = pipeline("text-generation", model="Qwen/Qwen2.5-0.5B-Instruct", device=-1)
+                model_status = "ready"
+                print("LLM loaded!")
+            except Exception as e:
+                model_status = "error"
+                print(f"LLM load error: {e}")
+                raise
     return query_pipeline
+
+@app.on_event("startup")
+def load_llm_on_startup():
+    threading.Thread(target=get_llm, daemon=True).start()
 
 class SyncRequest(BaseModel):
     directory: str
@@ -134,6 +149,28 @@ def query_rag(req: QueryRequest):
         # Deduplicate sources
         unique_sources = list({s.get("source", "Unknown") for s in sources if s})
         
-        return {"answer": answer, "sources": unique_sources}
+        return {"answer": answer, "sources": list(unique_sources)} # Changed from source_files to unique_sources
     except Exception as e:
         return {"answer": f"Error generating response: {str(e)}", "sources": []}
+
+# --- Serve React Frontend ---
+# Mount the dist folder to serve static assets (JS, CSS, images)
+frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+if os.path.exists(frontend_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    # Catch-all route to serve the React index.html for any non-API route
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # Ignore API routes
+        if full_path.startswith("api/"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="API route not found")
+        
+        # Serve specific files if requested directly (like vite.svg, etc)
+        file_path = os.path.join(frontend_dist, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+            
+        # Fallback to index.html for React Router
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
