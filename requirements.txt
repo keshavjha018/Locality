@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+chromadb
+llama-cpp-python
+sentence-transformers
+pydantic
+python-multipart

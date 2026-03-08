@@ -1,0 +1,9 @@
+backend_venv/
+frontend/node_modules/
+frontend/dist/
+models_cache/
+locality_storage/
+chroma_db/
+locality_tracker.db
+__pycache__/
+.env
